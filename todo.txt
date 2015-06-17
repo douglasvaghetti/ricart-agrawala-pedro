@@ -1,0 +1,3 @@
+-fazer os timestamps funcionarem
+-adicionar os mutex
+-botar a obetanção de recurso em outra thread p/ poder pegar multiplos recursos
