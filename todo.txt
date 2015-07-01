@@ -1,2 +1,0 @@
--fazer os timestamps funcionarem
--adicionar os mutex

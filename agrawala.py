@@ -1,39 +1,45 @@
-import socket
 import sys
-import rede
-import recursos
+import random
 from redefinePrint import cprint, draw_print
-
-if len(sys.argv) <= 2:
-    cprint("modo de uso:\npython agrawala.py prioridade ip1 ip2 ip3 ... ")
-else:
-    prioridade = float(sys.argv[1])/10.0
-    rede.timestamp = 1+prioridade
-    lista_ips_peers = [socket.gethostname()]
+import middleware
+import recursos
 
 if len(sys.argv) <= 1:
-    rede.abre_thread_espera_conexoes()
-    cprint("thread de espera de conexoes aberta")
-print "aperte enter depois que todos clientes estiverem abertos"
-_ = raw_input()
-if len(sys.argv) > 1:
-    rede.conecta_peers(lista_ips_peers)
-    cprint("todos peers conectados")
+    cprint("modo de uso:\npython agrawala.py minhaPorta ip1 ip2 ip3 porta1 porta2 porta3")
+else:
+    lista_ips_peers = sys.argv[2:(len(sys.argv)-2)/2+2]
+    print "minha porta: ",sys.argv[1]
+    porta_recebe_conexoes = int(sys.argv[1])
+    print "lista de ips = ",lista_ips_peers
+    lista_portas_peers = sys.argv[(len(sys.argv))/2+1:]
+    print "lista portas peers = ",lista_portas_peers
+    middleware.numero_de_peers = len(lista_ips_peers)
+    print "setou o numero de peers para",middleware.numero_de_peers
 
-cprint("existem atualmente", recursos.numeroDeRecursos)
+
+middleware.init(zip(lista_ips_peers,[int(x) for x in lista_portas_peers]),porta_recebe_conexoes,porta_recebe_conexoes+10)
+cprint("thread recebedora de mensagens aberta")
+
+
+cprint("aperte enter depois que todos clientes estiverem abertos")
+draw_print()
+
+cprint("existem atualmente", recursos.numero_de_recursos,"recursos")
+
 while True:
-    cprint('digite "o n" para obter o recurso n e "l n" para liberar o recurso n')
     draw_print()
     entrada = raw_input()
-    comando, recurso = entrada.split(" ")
-    recurso = int(recurso)
+    try:
+        comando, recurso = entrada.split(" ")
+        recurso = int(recurso)
+    except:
+        cprint("erro na entrada")
+        continue
     if comando == "o":
         cprint("adquirindo o recurso", recurso)
         recursos.adquire_recurso(recurso)
-        cprint("recurso obtido")
     elif comando == "l":
         cprint("liberando recurso", recurso)
         recursos.libera_recurso(recurso)
-        cprint("recurso liberado")
     else:
         cprint("comando nao reconhecido:'"+comando+"'")

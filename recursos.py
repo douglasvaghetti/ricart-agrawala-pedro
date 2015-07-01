@@ -1,71 +1,54 @@
-import rede
+import middleware
 import thread
-
-
-numeroDeRecursos = 10
-TENHO, QUERO, PODEPEGAR = range(3)
-estadoRecursos = [PODEPEGAR]*numeroDeRecursos
-ACKs_obtidos = [[False]*rede.numero_de_peers]*numeroDeRecursos
-fila_pedidos_ack_armazenados = [[]]*numeroDeRecursos
 from redefinePrint import cprint
 
+numero_de_recursos = 10
+TEM,QUER,LIVRE = range(3)
+estadoRecursos = [LIVRE]*numero_de_recursos
+tempoMeuPedido = [0]*numero_de_recursos
+fila_pedidos_recursos = []
+pode_pegar_recebidos = [0]*numero_de_recursos
 
-def tem_recurso(n):
-    return estadoRecursos[n] == TENHO
+for x in range(numero_de_recursos):
+    fila_pedidos_recursos.append(list())
 
+def trata_requisicao(recurso,timestamp_mensagem,peer_que_pediu):
+    cprint("recebeu requisicao do peer",peer_que_pediu,"para acessar o recurso",recurso)
+    if estadoRecursos[recurso]==LIVRE:
+        cprint("recurso",recurso,"livre, mandando que pode pegar")
+        middleware.mandaMensagem(str(middleware.getTimestamp())+":PODEPEGAR:"+str(recurso)+":by:"+str(middleware.portaRecebeMensagens), peer_que_pediu)
+    elif estadoRecursos[recurso]==QUER:
+        if timestamp_mensagem<tempoMeuPedido[recurso]:
+            cprint("queria o recurso",recurso,"mas timestamp era posterior, mandando que pode pegar")
+            middleware.mandaMensagem(str(middleware.getTimestamp())+":PODEPEGAR:"+str(recurso)+":by:"+str(middleware.portaRecebeMensagens), peer_que_pediu)
+    else:
+        cprint("ja tinha ou queria com timestamp menor, pedido do recurso",recurso,"fica na fila")
+        fila_pedidos_recursos[recurso].append(peer_que_pediu)
 
-def quer_recurso(n):
-    return estadoRecursos[n] == QUERO
-
-
-def adquire_recurso(recurso):
-    thread.start_new_thread(thread_adquire_recurso, (recurso,))
-
-
-def thread_adquire_recurso(recurso):
-    if estadoRecursos[recurso] != PODEPEGAR:
-        cprint("voce ja tem ou ja quer este recurso")
-        return
-    estadoRecursos[recurso] = QUERO
-    ACKs_obtidos[recurso] = [False]*rede.numero_de_peers
-    rede.broadcast(str(recurso))
-    while True:
-        #baixar o mutex
-        if ACKs_obtidos[recurso] == [True]*rede.numero_de_peers:
-            #libera mutex
-            break
-        #libera mutex
-    estadoRecursos[recurso] = TENHO
-
+def recebe_pode_pegar(recurso):
+    pode_pegar_recebidos[recurso]+=1
+    cprint("recebeu pode pegar do recurso",recurso)
+    if pode_pegar_recebidos[recurso]==middleware.numero_de_peers:
+        cprint("todos peers aprovam pegada do recurso",recurso)
+        estadoRecursos[recurso] = TEM
+        cprint("voce agora tem o recurso ",recurso)
 
 def libera_recurso(recurso):
-    if not tem_recurso(recurso):
-        cprint("voce nao pode liberar um recurso que voce nao tem")
-        return
-    estadoRecursos[recurso]=PODEPEGAR
-    for pedido in fila_pedidos_ack_armazenados[recurso]:
-        rede.manda_ack(pedido, recurso)
+    if estadoRecursos[recurso] == TEM:
+        estadoRecursos[recurso] = LIVRE
+        for peer in fila_pedidos_recursos[recurso]:
+            middleware.mandaMensagem(str(middleware.getTimestamp())+":PODEPEGAR:"+str(recurso)+":by:"+str(middleware.portaRecebeMensagens), peer)
+        fila_pedidos_recursos[recurso] = list()
+        cprint("recurso",recurso,"liberado")
+    else:
+        cprint("voce nao tem o recurso",recurso,"para liberar ele")
 
-
-def trata_pedido_recurso(peer, recurso, timestamp_pedido):
-    cprint("pedido do peer", peer, "para o recurso", recurso, "com timestamp", timestamp_pedido,)
-    if estadoRecursos[recurso] == PODEPEGAR:
-        rede.manda_ack(peer, recurso)
-        cprint("concedido")
-    elif estadoRecursos[recurso] == QUERO:
-        if timestamp_pedido < rede.timestamp:
-            rede.manda_ack(peer, recurso)
-            cprint("concedido")
-        else:
-            fila_pedidos_ack_armazenados[recurso].append(peer)
-            cprint("inserido na fila")
-    elif estadoRecursos[recurso] == TENHO:
-        fila_pedidos_ack_armazenados[recurso].append(peer)
-        cprint("inserido na fila")
-
-
-def trata_ack(peer, recurso):
-    #baixa mutex
-    ACKs_obtidos[recurso][peer] = True
-    cprint("ack recebido do peer ", peer, "para recurso", recurso)
-    #levanta mutex
+def adquire_recurso(recurso):
+    if estadoRecursos[recurso] ==LIVRE:
+        estadoRecursos[recurso] = QUER
+        tempoMeuPedido[recurso] = middleware.getTimestamp()
+        mensagem = str(middleware.getTimestamp())+":POSSOPEGAR:"+str(recurso)+":by:"+str(middleware.portaRecebeMensagens)
+        cprint("pedindo recurso ",recurso,"a todos peers")
+        middleware.broadcastMensagem(mensagem)
+    else:
+        cprint("voce ja tem ou ja requisitou esse recurso")
